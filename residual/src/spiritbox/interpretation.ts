@@ -151,6 +151,10 @@ export function interpret(plan: FragmentPlan, durationSec: number, config: Resid
   if (!reading) {
     return { kind: 'signal', title: 'Possible audio fragment', alternates: [], detail: `Clipped vocal-band burst · ${dur}`, logged: !chance(rng, cfg.unloggedLowClarityChance) };
   }
+  // Obvious broadcast bleed is labelled as such, the way a careful reviewer would.
+  if (v.entry.kind === 'radio' && v.form === 'word' && clarity >= 0.5) {
+    return { kind: 'fragment', title: 'Possible broadcast fragment', reading, alternates: [], detail: `Likely radio bleed · ${dur}`, logged: true };
+  }
   const unclear = clarity < 0.62;
   const alternates = unclear && v.form === 'word' ? soundalikes(text, rng, clarity < 0.5 ? 2 : 1) : [];
   const confidence = clarity >= 0.72 ? 'Clear' : clarity >= 0.55 ? 'Moderate clarity' : 'Low clarity';

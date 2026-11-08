@@ -149,7 +149,7 @@ export const DEFAULT_CONFIG: ResidualConfig = {
       delayedEchoMinAgeSec: 25,
     },
     response: {
-      silenceChance: 0.42,
+      silenceChance: 0.34,
       delays: [
         { weight: 26, range: [1, 3] },
         { weight: 34, range: [5, 8] },

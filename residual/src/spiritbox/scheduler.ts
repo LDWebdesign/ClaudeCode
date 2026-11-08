@@ -87,7 +87,7 @@ export class ResponseScheduler {
     let decision: Decision;
     if (chance(this.rng, Math.min(0.95, Math.max(0, silence)))) {
       decision = { kind: 'silence', utteranceId: u.id, reason: 'no response drawn' };
-    } else if (this.pending.some((p) => p.cause !== 'burst') && chance(this.rng, 0.5)) {
+    } else if (this.pending.some((p) => p.cause !== 'burst') && chance(this.rng, 0.35)) {
       // A response is already on its way; it will be drawn from memory that now includes this question.
       decision = { kind: 'absorbed', utteranceId: u.id, reason: 'earlier response still pending' };
     } else {
