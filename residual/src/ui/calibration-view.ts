@@ -119,6 +119,7 @@ const GROUPS: { title: string; intro?: string; ctls: Ctl[] }[] = [
   {
     title: 'Diagnostics',
     ctls: [
+      { kind: 'toggle', label: 'Anomaly test button', hint: 'Adds a Test button to the camera for forcing an anomaly on demand. Test anomalies stay up about 4 seconds and are never logged.', get: (c) => c.camera.testControls, set: (c, v) => (c.camera.testControls = v) },
       { kind: 'toggle', label: 'Show engine decisions', hint: 'Reveals detected locations, engine-only events and the reasoning behind each fragment. Spoils the effect; for tuning.', get: (c) => c.diagnostics, set: (c, v) => (c.diagnostics = v) },
     ],
   },

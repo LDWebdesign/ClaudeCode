@@ -97,6 +97,18 @@ describe('anomaly engine', () => {
     }
   });
 
+  it('forces a held test figure on demand, only where it can be placed', () => {
+    const engine = new AnomalyEngine(() => cloneConfig(DEFAULT_CONFIG), seededRng(5));
+    const figures = ['partial-figure', 'lean', 'hall-figure', 'stair-figure', 'window-shape'] as const;
+    const a = engine.force(0, sitesFor('doorway'), figures, { hold: 4, test: true });
+    expect(a).toBeTruthy();
+    expect(figures).toContain(a!.def.type);
+    expect(a!.test).toBe(true);
+    expect(a!.t1 - a!.t0).toBeGreaterThanOrEqual(4);
+    // nothing to hide a figure behind on a plain wall
+    expect(new AnomalyEngine(() => cloneConfig(DEFAULT_CONFIG), seededRng(5)).force(0, sitesFor('blank'), figures, { hold: 4, test: true })).toBeUndefined();
+  });
+
   it('can make anomalies that last only a few frames', () => {
     const { started } = simulate(rich, 12, { config: (c) => (c.camera.footageOnlyChance = 1) });
     const short = started.filter((a) => a.footageOnly);

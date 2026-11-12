@@ -129,6 +129,8 @@ export interface CameraConfig {
     saturation: number;
     nightVision: boolean;
   };
+  /** show the Test button for forcing an anomaly on demand */
+  testControls: boolean;
 }
 
 export interface ResidualConfig {
@@ -203,6 +205,7 @@ export const DEFAULT_CONFIG: ResidualConfig = {
       stillnessRequired: 0.6,
     },
     image: { exposureEv: 0.2, grain: 0.5, saturation: 0.3, nightVision: false },
+    testControls: true,
   },
   diagnostics: false,
 };

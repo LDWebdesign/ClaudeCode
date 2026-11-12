@@ -1,4 +1,5 @@
 /** Visual anomaly scanner panel. */
+import { type AnomalyType, SITE_LABEL } from '../camera/anomalies';
 import type { CameraController, CameraState } from '../camera/controller';
 import type { ConfigStore } from '../config';
 import type { Session } from '../session/session';
@@ -7,6 +8,17 @@ import type { LogEvent } from '../session/types';
 import { clamp } from '../util/rng';
 import { clockTime, timecode, uid } from '../util/time';
 import { h, toast } from './dom';
+
+/** What the Test menu can force, and what each needs in view. */
+const TESTS: { label: string; types?: AnomalyType[]; needs: string }[] = [
+  { label: 'Figure', types: ['partial-figure', 'lean', 'hall-figure', 'stair-figure', 'window-shape'], needs: 'a doorway, a door edge, a hallway, stairs or a window' },
+  { label: 'Head', types: ['crown', 'rise'], needs: 'a doorway, a door edge or the top of a chair or sofa' },
+  { label: 'Shoulder', types: ['shoulder'], needs: 'a doorway or a door edge' },
+  { label: 'Hat', types: ['brim'], needs: 'a doorway or a door edge' },
+  { label: 'Shadow', types: ['densify', 'edge-creep', 'pool'], needs: 'a dim corner or shadow (not pitch black)' },
+  { label: 'Any', needs: 'a doorway, a door edge, furniture or a dim corner' },
+];
+const TEST_HOLD_SEC = 4;
 
 const SITE_COLORS: Record<string, string> = {
   doorway: '#c99047', 'door-edge': '#d6b37a', hallway: '#8fb5a0', 'dark-corner': '#7f8fb0', shadow: '#6d7690', furniture: '#b08f7f', window: '#cfd6dd', stairs: '#a0a68a',
@@ -30,7 +42,8 @@ export class CameraView {
   private nvBtn: HTMLButtonElement;
   private lampBtn: HTMLButtonElement;
   private exp: HTMLInputElement;
-  private diagBar = h('div.hidden', { style: 'position:absolute;left:14px;top:52px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto' });
+  private testBtn: HTMLButtonElement;
+  private testMenu = h('div.test-menu.hidden', { role: 'menu', 'aria-label': 'Force a test anomaly' });
   private session?: Session;
   private lastScan = 0;
   private visible = false;
@@ -55,11 +68,11 @@ export class CameraView {
     const flip = h('button.btn', { type: 'button', onclick: () => void this.camera.flip(this.feed) }, 'Flip');
     const shutter = h('button.shutter', { type: 'button', 'aria-label': 'Capture frame', onclick: () => void this.captureStill() });
 
-    const force = (label: string, footage = false) =>
-      h('button.btn', { type: 'button', style: 'min-height:28px;padding:0 8px;background:rgba(0,0,0,.6)', onclick: () => {
-        if (!this.camera.force(undefined, footage)) toast('No persistent location to host an anomaly yet');
-      } }, label);
-    this.diagBar.append(force('Force anomaly'), force('Force 3-frame', true));
+    this.testBtn = h('button.btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'menu', onclick: () => this.toggleTestMenu() }, 'Test');
+    this.testMenu.append(
+      h('span.label', null, 'Force a test anomaly'),
+      ...TESTS.map((t) => h('button.btn', { type: 'button', role: 'menuitem', onclick: () => this.runTest(t) }, t.label)),
+    );
 
     this.el = h('div.panel.cam', { 'data-active': 'false', role: 'tabpanel', 'aria-label': 'Visual scanner' },
       h('div.viewport', null,
@@ -72,14 +85,14 @@ export class CameraView {
           h('div.bl', null, h('div.scanbar', null, this.scanFill), this.scanText),
           h('div.br', null, h('div.conf', null, ...this.confBars), this.confText),
         ),
-        this.diagBar,
+        this.testMenu,
         this.msg,
       ),
       h('label.exp', null, h('span.label', null, 'EV'), this.exp, this.expVal),
       h('div.cam-controls', null,
         h('div.left', null, this.nvBtn, this.lampBtn),
         shutter,
-        h('div.right', null, flip),
+        h('div.right', null, this.testBtn, flip),
       ),
       this.history,
     );
@@ -113,8 +126,30 @@ export class CameraView {
       this.el.classList.add('acquire');
       void this.camera.start(this.feed);
     } else {
+      this.toggleTestMenu(false);
       this.camera.stop();
     }
+  }
+
+  private toggleTestMenu(open = this.testMenu.classList.contains('hidden')): void {
+    this.testMenu.classList.toggle('hidden', !open);
+    this.testBtn.setAttribute('aria-expanded', String(open));
+    this.testBtn.setAttribute('aria-pressed', String(open));
+  }
+
+  /** Forces an anomaly of the chosen kind and holds it long enough to look at. */
+  private runTest(t: (typeof TESTS)[number]): void {
+    this.toggleTestMenu(false);
+    if (this.camera.state !== 'live') {
+      toast('The camera isn’t running yet');
+      return;
+    }
+    const a = this.camera.force(t.types, { hold: TEST_HOLD_SEC, test: true });
+    if (!a) {
+      toast(`Nowhere to place it yet. Point at ${t.needs}, and hold still for a second.`);
+      return;
+    }
+    toast(`${t.label === 'Any' ? 'Anomaly' : t.label} placed ${SITE_LABEL[a.site.kind]} — it’s faint, hold still`);
   }
 
   private sync(): void {
@@ -122,7 +157,8 @@ export class CameraView {
     this.exp.value = String(img.exposureEv);
     this.expVal.textContent = `${img.exposureEv >= 0 ? '+' : ''}${img.exposureEv.toFixed(1)}`;
     this.nvBtn.setAttribute('aria-pressed', String(img.nightVision));
-    this.diagBar.classList.toggle('hidden', !this.config.value.diagnostics);
+    this.testBtn.classList.toggle('hidden', !this.config.value.camera.testControls);
+    if (!this.config.value.camera.testControls) this.toggleTestMenu(false);
     if (!this.config.value.diagnostics) {
       const ctx = this.diag.getContext('2d');
       ctx?.clearRect(0, 0, this.diag.width, this.diag.height);

@@ -9,7 +9,7 @@ import { Emitter } from '../util/emitter';
 import { type Rng, between, chance, clamp, inRange, mathRng } from '../util/rng';
 import { uid } from '../util/time';
 import { type AnalysisResult, EnvironmentAnalyzer, type Site, estimateShift, lumaFromRgba } from './analysis';
-import { type ActiveAnomaly, type AnomalyType, AnomalyEngine, type ScanResult, describeAnomaly } from './anomalies';
+import { type ActiveAnomaly, type AnomalyType, AnomalyEngine, type ForceOptions, type ScanResult, describeAnomaly } from './anomalies';
 import { CameraRenderer } from './renderer';
 
 export type CameraState = 'off' | 'starting' | 'live' | 'denied' | 'unavailable' | 'error';
@@ -187,9 +187,10 @@ export class CameraController extends Emitter<CameraEvents> {
     return c?.captureStream?.(30);
   }
 
-  /** Diagnostics: show a specific anomaly now. */
-  force(type?: AnomalyType, footageOnly = false): boolean {
-    return !!this.anomalies.force(this.clock(), this.sites, type, footageOnly);
+  /** Shows one of the given anomaly types now, if the scene has somewhere to put it. */
+  force(types?: AnomalyType | readonly AnomalyType[], opts: ForceOptions = {}): ActiveAnomaly | undefined {
+    this.anomalies.abort();
+    return this.anomalies.force(this.clock(), this.sites, types, opts);
   }
 
   // --- internals ------------------------------------------------------------------------
@@ -324,9 +325,11 @@ export class CameraController extends Emitter<CameraEvents> {
   }
 
   private onAnomalyStart(a: ActiveAnomaly): void {
+    this.prevTrack = undefined;
+    // test anomalies are for looking at, not for the investigation log
+    if (a.test) return;
     const logChance = this.config.value.camera.logChance[a.def.tier];
     this.loggedIds.set(a.id, { logged: chance(this.rng, a.footageOnly ? logChance * 0.4 : logChance) });
-    this.prevTrack = undefined;
   }
 
   private onAnomalyPeak(a: ActiveAnomaly): void {

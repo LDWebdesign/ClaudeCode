@@ -112,6 +112,25 @@ await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}21-camera-diagnostics.png` });
 await page.evaluate(() => window.residual.config.update((c) => (c.diagnostics = false)));
 
+// the Test menu forces a figure, holds it ~4 s, and keeps it out of the log
+{
+  await page.waitForTimeout(500);
+  const visualBefore = await page.evaluate(() => window.residual.session.events.filter((e) => e.type === 'visual').length);
+  await page.click('.cam-controls button[aria-haspopup=menu]');
+  const menuShown = await page.isVisible('.test-menu');
+  await page.click('.test-menu button:has-text("Figure")');
+  await page.waitForTimeout(300);
+  const forced = await page.evaluate(() => {
+    const a = window.residual.camera.anomalies.active;
+    return a ? { type: a.def.type, test: a.test, dur: a.t1 - a.t0, site: a.site.kind } : null;
+  });
+  await page.screenshot({ path: `${OUT}25-test-figure.png` });
+  check('Test menu forces a held figure', menuShown && !!forced && forced.test && forced.dur >= 4 && ['partial-figure', 'lean', 'hall-figure', 'stair-figure', 'window-shape'].includes(forced.type), JSON.stringify(forced));
+  await page.waitForTimeout(8000);
+  const visualAfter = await page.evaluate(() => window.residual.session.events.filter((e) => e.type === 'visual').length);
+  check('test anomalies are not logged', visualAfter === visualBefore, `${visualBefore} -> ${visualAfter}`);
+}
+
 // force each anomaly type and photograph it mid-appearance
 await page.click('button.rec');
 const types = await page.evaluate(() => ['densify', 'pool', 'crown', 'shoulder', 'brim', 'rise', 'hall-figure', 'stair-figure', 'window-shape', 'partial-figure', 'lean']);

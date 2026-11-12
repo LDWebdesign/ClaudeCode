@@ -90,6 +90,15 @@ export interface ActiveAnomaly {
   offset: Pt;
   confidence: number;
   peakAt: number;
+  /** forced from the Test menu: held longer, never logged */
+  test: boolean;
+}
+
+export interface ForceOptions {
+  footageOnly?: boolean;
+  /** keep it on screen at least this many seconds */
+  hold?: number;
+  test?: boolean;
 }
 
 export type ScanResult = 'normal' | 'anomaly' | 'refractory' | 'dormant' | 'unstable' | 'no-site' | 'busy';
@@ -447,10 +456,11 @@ export class AnomalyEngine extends Emitter<AnomalyEvents> {
     this.emit('end', a);
   }
 
-  /** Diagnostics: spawn a specific anomaly now if a compatible site exists. */
-  force(now: number, sites: readonly Site[], type?: AnomalyType, footageOnly = false): ActiveAnomaly | undefined {
-    const defs = type ? DEFS.filter((d) => d.type === type) : DEFS;
-    return this.spawnFrom(now, defs, sites, footageOnly);
+  /** Spawns one of the given anomaly types now, if a compatible on-screen site exists. */
+  force(now: number, sites: readonly Site[], types?: AnomalyType | readonly AnomalyType[], opts: ForceOptions = {}): ActiveAnomaly | undefined {
+    const wanted = types === undefined ? undefined : new Set<AnomalyType>(typeof types === 'string' ? [types] : types);
+    const defs = wanted ? DEFS.filter((d) => wanted.has(d.type)) : DEFS;
+    return this.spawnFrom(now, defs, sites, !!opts.footageOnly, opts);
   }
 
   private completeScan(now: number, sites: readonly Site[], stillness: number): void {
@@ -471,7 +481,7 @@ export class AnomalyEngine extends Emitter<AnomalyEvents> {
     report(spawned ? 'anomaly' : 'no-site', tier);
   }
 
-  private spawnFrom(now: number, defs: Def[], sites: readonly Site[], footageOnly: boolean): ActiveAnomaly | undefined {
+  private spawnFrom(now: number, defs: Def[], sites: readonly Site[], footageOnly: boolean, opts: ForceOptions = {}): ActiveAnomaly | undefined {
     const cfg = this.config().camera;
     const v = this.visible;
     const inView = (x: number, y: number, m = 0.03) => x > v.x + m && x < v.x + v.w - m && y > v.y + m && y < v.y + v.h - m;
@@ -490,7 +500,7 @@ export class AnomalyEngine extends Emitter<AnomalyEvents> {
 
     const { def, site, placement } = choice;
     const short = footageOnly && def.footage;
-    const duration = short ? between(this.rng, 0.06, 0.1) : inRange(this.rng, def.duration);
+    const duration = short ? between(this.rng, 0.06, 0.1) : Math.max(inRange(this.rng, def.duration), opts.hold ?? 0);
     const vis = cfg.visibility * 2;
     const density = clamp(inRange(this.rng, def.density) * vis, 0, 0.92);
     const a: ActiveAnomaly = {
@@ -507,6 +517,7 @@ export class AnomalyEngine extends Emitter<AnomalyEvents> {
       offset: [0, 0],
       confidence: clamp(def.detect * (density / def.density[1]) * between(this.rng, 0.55, 1.15) * (short ? 0.5 : 1), 0.05, 0.78),
       peakAt: now + duration * between(this.rng, 0.35, 0.6),
+      test: !!opts.test,
     };
     this.active = a;
     this.peakSent = false;
@@ -580,18 +591,19 @@ export class AnomalyEngine extends Emitter<AnomalyEvents> {
   }
 }
 
+export const SITE_LABEL: Record<SiteKind, string> = {
+  doorway: 'near doorway',
+  'door-edge': 'at edge of door',
+  hallway: 'far end of hallway',
+  'dark-corner': 'in corner',
+  shadow: 'in shadowed area',
+  furniture: 'behind furniture',
+  window: 'at window',
+  stairs: 'top of stairs',
+};
+
 export function describeAnomaly(a: ActiveAnomaly): { title: string; detail: string } {
-  const where: Record<SiteKind, string> = {
-    doorway: 'near doorway',
-    'door-edge': 'at edge of door',
-    hallway: 'far end of hallway',
-    'dark-corner': 'in corner',
-    shadow: 'in shadowed area',
-    furniture: 'behind furniture',
-    window: 'at window',
-    stairs: 'top of stairs',
-  };
-  const loc = where[a.site.kind];
+  const loc = SITE_LABEL[a.site.kind];
   const c = a.confidence;
   const moving = a.def.type === 'hall-figure' || a.def.type === 'lean' || a.def.type === 'shoulder';
   const lead =
