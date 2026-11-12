@@ -2,3 +2,4 @@ node_modules
 dist
 e2e/media
 e2e/out
+.netlify

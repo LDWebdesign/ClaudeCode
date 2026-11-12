@@ -17,6 +17,10 @@ Camera and microphone access require a secure context, so serve the file over **
 `localhost`). Any static host works — GitHub Pages, Netlify, an S3 bucket. On a phone, open the
 URL and use *Add to Home Screen* for a full-screen app.
 
+It is deployed on Netlify at **https://residual-34ut.netlify.app**. To redeploy, run
+`npm run build` and publish `residual/dist/` (the page plus its `_headers` file), for example with
+`netlify deploy --prod --dir residual/dist` or by dropping the folder on app.netlify.com/drop.
+
 ```sh
 npm install
 npm run dev        # dev server (https needed for phones: use a tunnel or a host)
